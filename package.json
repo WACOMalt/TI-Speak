@@ -1,0 +1,18 @@
+{
+  "name": "ti-speak",
+  "version": "1.0.0",
+  "description": "TI-99/4A TMS5220 Speech Synthesizer Simulator",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test src/**/*.test.js"
+  },
+  "keywords": ["ti-99", "speech-synthesis", "tms5220", "lpc", "retro"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
