@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TI-Speak | TI-99/4A Speech Synthesizer</title>
-    <meta name="description" content="TI-99/4A TMS5220 Speech Synthesizer Simulator - Experience the iconic robotic voice of the 1980s">
+    <meta name="description"
+        content="TI-99/4A TMS5220 Speech Synthesizer Simulator - Experience the iconic robotic voice of the 1980s">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Roboto:wght@400;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="scanlines"></div>
     <div class="container">
@@ -28,11 +32,8 @@
                     <h2>Text Input</h2>
                 </div>
                 <div class="input-container">
-                    <textarea 
-                        id="textInput" 
-                        placeholder="Type text to speak... or use /phoneme notation/"
-                        rows="4"
-                    >HELLO WORLD</textarea>
+                    <textarea id="textInput" placeholder="Type text to speak... or use /phoneme notation/"
+                        rows="4">HELLO WORLD</textarea>
                     <div class="phoneme-preview">
                         <span class="label">Phonemes:</span>
                         <span id="phonemePreview" class="phonemes">-</span>
@@ -71,7 +72,8 @@
                     <div class="parameter-grid">
                         <div class="param-group">
                             <label for="pitchShift">Pitch Shift:</label>
-                            <input type="range" id="pitchShift" min="-20" max="20" value="0">
+                            <input type="range" id="pitchShift" min="-20" max="20" value="0" disabled
+                                title="Not implemented in static version yet">
                             <span id="pitchValue">0</span>
                         </div>
                         <div class="param-group">
@@ -80,7 +82,7 @@
                             <span id="speedValue">100%</span>
                         </div>
                     </div>
-                    
+
                     <div class="phoneme-list-section">
                         <h3>Phoneme Reference</h3>
                         <div id="phonemeList" class="phoneme-grid">
@@ -95,17 +97,18 @@
                 <div class="info-card">
                     <h3>About TI-Speak</h3>
                     <p>
-                        This simulator recreates the iconic speech synthesis of the 
+                        This simulator recreates the iconic speech synthesis of the
                         <strong>Texas Instruments TI-99/4A</strong> home computer's Speech Synthesizer module.
                     </p>
                     <p>
-                        The original hardware used the <strong>TMS5220</strong> chip, which implemented 
+                        The original hardware used the <strong>TMS5220</strong> chip, which implemented
                         <strong>Linear Predictive Coding (LPC)</strong> to compress and synthesize human speech.
                     </p>
                     <div class="tech-specs">
                         <span class="spec">8 kHz Sample Rate</span>
                         <span class="spec">LPC-10</span>
                         <span class="spec">40 Hz Frame Rate</span>
+                        <span class="spec">Client-Side Synthesis</span>
                     </div>
                 </div>
             </section>
@@ -117,6 +120,8 @@
         </footer>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Loaded as module for ES6 imports -->
+    <script type="module" src="app.js"></script>
 </body>
+
 </html>

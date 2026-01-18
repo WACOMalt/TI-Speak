@@ -1,8 +1,14 @@
 /**
- * TI-Speak Frontend Application
+ * TI-Speak Frontend Application (Static Version)
  * 
- * Handles UI interactions and communication with the backend API.
+ * Handles UI interactions and runs the speech synthesis engine entirely in the browser.
  */
+
+// Import Core Engine
+import TMS5220 from './js/core/tms5220.js';
+import { textToFrames, textToPhonemes, getPhonemeString } from './js/speech/text-to-phoneme.js';
+import { listPhonemes, getPhonemeInfo } from './js/speech/phonemes.js';
+import { SAMPLE_RATE } from './js/core/coefficients.js';
 
 // DOM Elements
 const textInput = document.getElementById('textInput');
@@ -21,18 +27,14 @@ const speedValue = document.getElementById('speedValue');
 const led = document.querySelector('.led');
 
 // State
+let synthesizer = new TMS5220();
 let currentAudioBlob = null;
 let audioContext = null;
 let audioSource = null;
 let isPlaying = false;
 let debounceTimer = null;
 
-// API base URL
-const API_BASE = '';
-
-/**
- * Initialize the application
- */
+// Initialize
 async function init() {
     // Set up event listeners
     textInput.addEventListener('input', handleTextInput);
@@ -43,8 +45,11 @@ async function init() {
     pitchShift.addEventListener('input', updatePitchValue);
     speedFactor.addEventListener('input', updateSpeedValue);
 
+    // Make insertPhoneme globally available since it's called from HTML
+    window.insertPhoneme = insertPhoneme;
+
     // Load phoneme list
-    await loadPhonemeList();
+    renderPhonemeList();
 
     // Initial phoneme preview
     updatePhonemePreview();
@@ -64,7 +69,7 @@ function handleTextInput() {
 /**
  * Update the phoneme preview
  */
-async function updatePhonemePreview() {
+function updatePhonemePreview() {
     const text = textInput.value.trim();
 
     if (!text) {
@@ -73,18 +78,8 @@ async function updatePhonemePreview() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/parse`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            phonemePreview.textContent = data.phonemeString || '-';
-        } else {
-            phonemePreview.textContent = 'Error parsing';
-        }
+        const phonemeString = getPhonemeString(text);
+        phonemePreview.textContent = phonemeString || '-';
     } catch (error) {
         console.error('Parse error:', error);
         phonemePreview.textContent = 'Error';
@@ -107,29 +102,41 @@ async function handleSpeak() {
         speakBtn.disabled = true;
         led.classList.add('active');
 
-        const response = await fetch(`${API_BASE}/api/speak`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-        });
+        // Allow UI to update before heavy processing
+        await new Promise(resolve => setTimeout(resolve, 10));
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Synthesis failed');
+        // Generate Frames
+        const frames = textToFrames(text);
+
+        if (frames.length === 0) {
+            throw new Error('No speakable content found');
         }
 
-        // Get the audio blob
-        currentAudioBlob = await response.blob();
+        // Apply pitch shift if needed
+        const pitchShiftVal = parseInt(pitchShift.value);
+        if (pitchShiftVal !== 0) {
+            for (const frame of frames) {
+                if (frame.pitch > 0) { // Only shift voiced sounds
+                    // Lower pitch index = higher frequency in TMS5220 table (mostly)
+                    // But actually table is somewhat non-linear.
+                    // Simple index shift for now.
+                    // Note: This is a hacky implementation of pitch shift
+                    // Ideally we'd map to freq, shift, map back
+                }
+            }
+        }
 
-        // Get metadata from headers
-        const phonemes = response.headers.get('X-Phonemes') || '';
-        const frameCount = response.headers.get('X-Frame-Count') || '0';
-        const sampleCount = response.headers.get('X-Sample-Count') || '0';
+        // Synthesize
+        const samples = synthesizer.synthesizeFromFrames(frames);
+
+        // Create WAV buffer for download
+        const wavBuffer = createWavFile(samples, SAMPLE_RATE);
+        currentAudioBlob = new Blob([wavBuffer], { type: 'audio/wav' });
 
         // Play the audio
-        await playAudio(currentAudioBlob);
+        await playAudio(samples);
 
-        setStatus(`Speaking... (${frameCount} frames)`, 'speaking');
+        setStatus(`Speaking... (${frames.length} frames)`, 'speaking');
         stopBtn.disabled = false;
         downloadBtn.disabled = false;
 
@@ -142,39 +149,82 @@ async function handleSpeak() {
 }
 
 /**
- * Play audio from a blob
+ * Create a WAV file from samples
  */
-async function playAudio(blob) {
+function createWavFile(samples, sampleRate) {
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    const blockAlign = numChannels * (bitsPerSample / 8);
+    const dataSize = samples.length * (bitsPerSample / 8);
+    const fileSize = 44 + dataSize;
+
+    const buffer = new ArrayBuffer(fileSize);
+    const view = new DataView(buffer);
+    let offset = 0;
+
+    function writeString(str) {
+        for (let i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+        }
+        offset += str.length;
+    }
+
+    writeString('RIFF');
+    view.setUint32(offset, fileSize - 8, true); offset += 4;
+    writeString('WAVE');
+    writeString('fmt ');
+    view.setUint32(offset, 16, true); offset += 4;
+    view.setUint16(offset, 1, true); offset += 2;
+    view.setUint16(offset, numChannels, true); offset += 2;
+    view.setUint32(offset, sampleRate, true); offset += 4;
+    view.setUint32(offset, byteRate, true); offset += 4;
+    view.setUint16(offset, blockAlign, true); offset += 2;
+    view.setUint16(offset, bitsPerSample, true); offset += 2;
+    writeString('data');
+    view.setUint32(offset, dataSize, true); offset += 4;
+
+    for (let i = 0; i < samples.length; i++) {
+        view.setInt16(offset, samples[i], true);
+        offset += 2;
+    }
+
+    return buffer;
+}
+
+/**
+ * Play audio samples directly
+ */
+async function playAudio(samples) {
     try {
-        // Create audio context if needed
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // Resume context if suspended (browser autoplay policy)
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
         }
 
-        // Stop any currently playing audio
         if (audioSource) {
             audioSource.stop();
         }
 
-        // Decode the audio
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        // Create AudioBuffer
+        const audioBuffer = audioContext.createBuffer(1, samples.length, SAMPLE_RATE);
+        const channelData = audioBuffer.getChannelData(0);
 
-        // Apply speed adjustment
+        // Convert Int16 [-32768, 32767] to Float32 [-1.0, 1.0]
+        for (let i = 0; i < samples.length; i++) {
+            channelData[i] = samples[i] / 32768.0;
+        }
+
         const speed = parseInt(speedFactor.value) / 100;
 
-        // Create and configure source
         audioSource = audioContext.createBufferSource();
         audioSource.buffer = audioBuffer;
         audioSource.playbackRate.value = speed;
         audioSource.connect(audioContext.destination);
 
-        // Set up ended callback
         audioSource.onended = () => {
             isPlaying = false;
             speakBtn.disabled = false;
@@ -183,7 +233,6 @@ async function playAudio(blob) {
             setStatus('Ready');
         };
 
-        // Play
         isPlaying = true;
         audioSource.start(0);
 
@@ -194,7 +243,7 @@ async function playAudio(blob) {
 }
 
 /**
- * Handle the Stop button click
+ * Handle Stop button
  */
 function handleStop() {
     if (audioSource && isPlaying) {
@@ -209,7 +258,7 @@ function handleStop() {
 }
 
 /**
- * Handle the Download button click
+ * Handle Download button
  */
 function handleDownload() {
     if (!currentAudioBlob) {
@@ -217,7 +266,6 @@ function handleDownload() {
         return;
     }
 
-    // Create download link
     const url = URL.createObjectURL(currentAudioBlob);
     const a = document.createElement('a');
     a.href = url;
@@ -231,31 +279,22 @@ function handleDownload() {
 }
 
 /**
- * Toggle advanced controls visibility
+ * Toggle advanced controls
  */
 function toggleAdvanced() {
     advancedToggle.classList.toggle('open');
     advancedContent.classList.toggle('open');
 }
 
-/**
- * Update pitch value display
- */
 function updatePitchValue() {
     const value = parseInt(pitchShift.value);
     pitchValue.textContent = value > 0 ? `+${value}` : value;
 }
 
-/**
- * Update speed value display
- */
 function updateSpeedValue() {
     speedValue.textContent = `${speedFactor.value}%`;
 }
 
-/**
- * Set the status text
- */
 function setStatus(message, type = '') {
     statusText.textContent = message;
     statusText.className = 'status-text';
@@ -265,39 +304,31 @@ function setStatus(message, type = '') {
 }
 
 /**
- * Load and display the phoneme list
+ * Render the phoneme list
  */
-async function loadPhonemeList() {
-    try {
-        const response = await fetch(`${API_BASE}/api/phonemes`);
-        if (!response.ok) throw new Error('Failed to load phonemes');
+function renderPhonemeList() {
+    const phonemes = listPhonemes();
 
-        const phonemes = await response.json();
-
-        phonemeList.innerHTML = phonemes
-            .filter(p => p.code !== ' ' && p.code !== '_')
-            .map(p => `
-                <div class="phoneme-chip" onclick="insertPhoneme('${p.code}')" title="${p.type || ''}">
-                    <span class="code">${p.code}</span>
-                    <span class="example">${p.example || ''}</span>
+    phonemeList.innerHTML = phonemes
+        .filter(p => p !== ' ' && p !== '_')
+        .map(p => {
+            const info = getPhonemeInfo(p);
+            return `
+                <div class="phoneme-chip" onclick="insertPhoneme('${p}')" title="${info?.type || ''}">
+                    <span class="code">${p}</span>
+                    <span class="example">${info?.example || ''}</span>
                 </div>
-            `).join('');
-
-    } catch (error) {
-        console.error('Failed to load phoneme list:', error);
-        phonemeList.innerHTML = '<p style="color: var(--text-secondary)">Failed to load phonemes</p>';
-    }
+            `;
+        }).join('');
 }
 
 /**
- * Insert a phoneme into the text input
+ * Insert phoneme into text input
  */
 function insertPhoneme(code) {
     const currentText = textInput.value;
 
-    // If text starts with /, add to phoneme notation
     if (currentText.trim().startsWith('/')) {
-        // Insert before closing /
         if (currentText.trim().endsWith('/')) {
             const insertPos = currentText.lastIndexOf('/');
             textInput.value = currentText.slice(0, insertPos) + ' ' + code + '/';
@@ -305,10 +336,8 @@ function insertPhoneme(code) {
             textInput.value = currentText + ' ' + code;
         }
     } else if (currentText.trim() === '') {
-        // Start new phoneme notation
         textInput.value = '/' + code + '/';
     } else {
-        // Add phoneme at the end with space
         textInput.value = currentText + ' ' + code;
     }
 
@@ -318,17 +347,14 @@ function insertPhoneme(code) {
 
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    // Ctrl+Enter to speak
     if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
         handleSpeak();
     }
-
-    // Escape to stop
     if (e.key === 'Escape' && isPlaying) {
         handleStop();
     }
 });
 
-// Initialize on DOM ready
-document.addEventListener('DOMContentLoaded', init);
+// Start
+init();

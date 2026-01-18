@@ -2,11 +2,15 @@
 
 TI-99/4A TMS5220 Speech Synthesizer Simulator - Experience the iconic robotic voice of the 1980s!
 
-![TI-Speak Screenshot](https://img.shields.io/badge/Port-7199-orange?style=flat-square) ![Node.js](https://img.shields.io/badge/Node.js-18+-green?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+![TI-Speak Screenshot](https://img.shields.io/badge/Status-Online-green?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square) ![Chip](https://img.shields.io/badge/Chip-TMS5220-orange?style=flat-square)
+
+## 🌐 [Live Demo](https://wacomalt.github.io/TI-Speak)
 
 ## About
 
 This is a **chip-level accurate emulator** of the Texas Instruments TMS5220 speech synthesizer chip used in the TI-99/4A Speech Synthesizer module (1979-1983). It faithfully recreates the distinctive robotic voice using **Linear Predictive Coding (LPC)** synthesis.
+
+The simulator runs entirely in your browser using client-side JavaScript, with NO backend server required.
 
 ## Features
 
@@ -17,22 +21,25 @@ This is a **chip-level accurate emulator** of the Texas Instruments TMS5220 spee
 - 🔤 **Phoneme Notation** - Direct control with `/HH EH L OW/` syntax
 - 💾 **WAV Download** - Save generated speech as audio files
 - 🖥️ **Retro UI** - Faithful TI-99/4A aesthetic with CRT effects
+- 🚀 **Static Site** - Runs offline or on any static host
 
-## Installation
+## Installation / Development
+
+To run the project locally:
 
 ```bash
 # Clone the repository
 git clone https://github.com/WACOMalt/TI-Speak.git
 cd TI-Speak
 
-# Install dependencies
+# Install dependencies needed for local dev server
 npm install
 
-# Start the server
-npm start
+# Start the local static server
+npx serve public
 ```
 
-Then open **http://localhost:7199** in your browser (7199 = leetspeak for TI99!)
+Then open **http://localhost:3000** in your browser.
 
 ## Usage
 
@@ -49,27 +56,14 @@ For precise control, use direct phoneme sequences:
 /HH EH L OW W ER L D/
 ```
 
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/speak` | POST | Text-to-speech, returns WAV |
-| `/api/phonemes/speak` | POST | Phoneme array to speech |
-| `/api/synthesize` | POST | Direct LPC frame synthesis |
-| `/api/parse` | POST | Text to phoneme conversion |
-| `/api/phonemes` | GET | List all phonemes |
-| `/api/info` | GET | Synthesizer info |
-
-### Example API Call
-
-```bash
-curl -X POST http://localhost:7199/api/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello World"}' \
-  --output speech.wav
-```
-
 ## Technical Details
+
+### Architecture
+
+The project was originally designed with a Node.js backend but has been migrated to a fully static client-side architecture.
+- **core/**: Contains the TMS5220 emulator and coefficients (ES Modules)
+- **speech/**: Text-to-phoneme conversion and frame decoding
+- **public/**: The web interface and entry point
 
 ### LPC Synthesis Parameters
 
@@ -77,27 +71,6 @@ The TMS5220 uses 12 parameters per frame:
 - **Energy** (4 bits) - Volume level
 - **Pitch** (6 bits) - Fundamental frequency  
 - **K1-K10** (3-5 bits each) - Reflection coefficients for vocal tract modeling
-
-### Project Structure
-
-```
-TI-Speak/
-├── package.json
-├── src/
-│   ├── server.js              # Express web server
-│   ├── core/
-│   │   ├── coefficients.js    # LPC lookup tables
-│   │   ├── tms5220.js         # Main chip emulator
-│   │   └── lpc-lattice.js     # Lattice filter
-│   └── speech/
-│       ├── frame-decoder.js   # Frame parsing
-│       ├── phonemes.js        # Allophone library
-│       └── text-to-phoneme.js # Text conversion
-└── public/
-    ├── index.html
-    ├── style.css
-    └── app.js
-```
 
 ## References
 
